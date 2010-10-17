@@ -23,6 +23,7 @@ class MainLoopSpec extends FlatSpec with ShouldMatchers {
         evaluating {
             mainloop.setChannel(ch, OP_READ, () => ())
         } should produce [IllegalArgumentException]
+        mainloop.clrChannel(ch, OP_READ)
     }
 
     "a server socket" should "be able to set accept" in {
@@ -49,8 +50,55 @@ class MainLoopSpec extends FlatSpec with ShouldMatchers {
             mainloop.clrChannel(ch, OP_CONNECT)
             ch.close()
         })
-        mainloop.runOnce()
+        mainloop.run()
         connected should equal (true)
+    }
+
+    "a cleared timer" should "not get fired" in {
+        var fired = false
+        val timer = mainloop.setTimer(0, { () => fired = true })
+        mainloop.clrTimer(timer)
+        mainloop.run()
+        fired should equal (false)
+    }
+
+    "a cleared timer" should "not be cleared again"  in {
+        val timer = mainloop.setTimer(0, { () => () })
+        mainloop.clrTimer(timer)
+        evaluating { mainloop.clrTimer(timer) } should produce [IllegalArgumentException]
+    }
+
+    "set timers" should "get fired in order" in {
+        var order: List[Int] = Nil
+        mainloop.setTimer(0, { () => order = 1 :: order })
+        mainloop.setTimer(0, { () => order = 2 :: order })
+        mainloop.run()
+        order should equal (2 :: 1 :: Nil)
+    }
+
+    "a firing timer" should "not deadlock if it sets another timer" in {
+        mainloop.setTimer(0, { () => mainloop.setTimer(10, () => ()) })
+        mainloop.run()
+    }
+
+    "a new timer" should "interrupt a blocking select" in {
+        val mainloop2 = new MainLoop
+        val ch = SocketChannel.open
+        val ch2 = SocketChannel.open
+        ch.configureBlocking(false)
+        ch2.configureBlocking(false)
+        mainloop.setChannel(ch, OP_READ, () => ())
+        mainloop2.setChannel(ch2, OP_READ, () => ())
+        val t = new Thread { override def run() { mainloop.run() } }
+        t.start()
+        mainloop.setTimer(30, { () =>
+            mainloop.clrChannel(ch, OP_READ)
+            mainloop2.setTimer(30, { () =>
+                mainloop2.clrChannel(ch2, OP_READ)
+            })
+        })
+        mainloop2.run
+        t.join()
     }
 }
 
