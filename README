@@ -1,1 +1,11 @@
-A YAM-like main loop for Scala.
+A YAM-like mainloop for Scala.
+
+I seem to rewrite this code with every new language I learn.  The idea is to
+provide an easy to use wrapper around select, with a thread-safe way to
+schedule timers (and have new timers interrupt a blocking select).  This is
+particularly nice in a functional language like Scala, where the callbacks
+that you pass in to wait for a socket to become ready can be first-class
+functions.
+
+Other examples of a mainloop like this one can be found in libsfs, the Bamboo
+DHT, and YAM (Yet Another Mainloop), which is part of the UIA project from MIT.

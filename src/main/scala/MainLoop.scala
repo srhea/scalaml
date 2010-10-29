@@ -48,6 +48,11 @@ class MainLoop {
             callbacks(ch).remove(op)
     }
 
+    // setTimer and clrTimer are safe to call from any thread.  Once run() has
+    // been called, all other functions in this class should only be called
+    // from within the callbacks that are called from within run itself.  You
+    // can use setTimer with a delay of 0 as a sort of mailbox abstraction to
+    // communicate between threads.
     def setTimer(delayMillis: Long, f: () => Unit): Timer = {
         val now = java.lang.System.currentTimeMillis
         var soonest = false
