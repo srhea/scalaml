@@ -33,22 +33,28 @@ class MainLoop {
         var skey = ch.keyFor(selector)
         if (skey == null)
             skey = ch.register(selector, op)
-        else {
-            require((skey.interestOps & op) == 0)
+        else if ((skey.interestOps & op) == 0)
             skey.interestOps(skey.interestOps | op)
-        }
         callbacks.getOrElseUpdate(ch, new HashMap[Int,()=>Unit])(op) = f
+    }
+
+    def getChannel(ch: SelectableChannel, op: Int): () => Unit = {
+        var skey = ch.keyFor(selector)
+        if (skey != null && (skey.interestOps & op) != 0)
+            callbacks(ch)(op)
+        else
+            null
     }
 
     def clrChannel(ch: SelectableChannel, op: Int) {
         var skey = ch.keyFor(selector)
-        require(skey != null)
-        require((skey.interestOps & op) != 0)
-        skey.interestOps(skey.interestOps & ~op)
-        if (skey.interestOps == 0)
-            callbacks.remove(ch)
-        else
-            callbacks(ch).remove(op)
+        if (skey != null && (skey.interestOps & op) != 0) {
+            skey.interestOps(skey.interestOps & ~op)
+            if (skey.interestOps == 0)
+                callbacks.remove(ch)
+            else
+                callbacks(ch).remove(op)
+        }
     }
 
     // setTimer and clrTimer are safe to call from any thread.  Once run() has

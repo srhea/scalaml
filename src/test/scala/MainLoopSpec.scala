@@ -11,18 +11,20 @@ class MainLoopSpec extends FlatSpec with ShouldMatchers {
     val ssock = ssch.socket
     var port = 0
 
-    "a channel that hasn't been set" should "throw an exception on clr" in {
+    "a channel that hasn't been set" should "not throw an exception on clr" in {
         val ch = SocketChannel.open
-        evaluating { mainloop.clrChannel(ch, OP_READ) } should produce [IllegalArgumentException]
+        mainloop.clrChannel(ch, OP_READ)
+        mainloop.getChannel(ch, OP_READ) should equal (null)
     }
 
-    "a channel that's already been set" should "throw an exception on a second set" in {
+    "a channel that's already been set twice" should "use the newer callback" in {
         val ch = SocketChannel.open
+        val f = () => println("foo")
+        val g = () => println("bar")
         ch.configureBlocking(false)
-        mainloop.setChannel(ch, OP_READ, () => ())
-        evaluating {
-            mainloop.setChannel(ch, OP_READ, () => ())
-        } should produce [IllegalArgumentException]
+        mainloop.setChannel(ch, OP_READ, f)
+        mainloop.setChannel(ch, OP_READ, g)
+        mainloop.getChannel(ch, OP_READ) should equal (g)
         mainloop.clrChannel(ch, OP_READ)
     }
 
