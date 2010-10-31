@@ -4,12 +4,7 @@ import scala.collection.mutable._
 import scala.collection.immutable.TreeSet
 import scala.collection.JavaConversions._
 
-class MainLoop {
-
-    private val selector = Selector.open()
-    private val callbacks = new HashMap[SelectableChannel,HashMap[Int,()=>Unit]]
-    private val ops = Array(OP_ACCEPT, OP_CONNECT, OP_READ, OP_WRITE)
-
+object MainLoop {
     class Timer(val when: Long, val seq: Long, val f: () => Unit)
     class TimerOrder extends Ordering[Timer] {
         def compare(x: Timer, y: Timer): Int = {
@@ -17,11 +12,19 @@ class MainLoop {
             if (c == 0) x.seq.compare(y.seq) else c
         }
     }
+}
+
+class MainLoop {
+
+    private val selector = Selector.open()
+    private val callbacks = new HashMap[SelectableChannel,HashMap[Int,()=>Unit]]
+    private val ops = Array(OP_ACCEPT, OP_CONNECT, OP_READ, OP_WRITE)
+
     // I suspect that most timers are canceled, or they're infrequent.  If they're infrequent,
     // then set time doesn't matter.  If they're canceled, then cancel time does matter.  So
     // I optimize for cancel time by using a sorted set.  (If I were optimizing for set time,
     // I'd use a priority queue.)
-    var timers = new TreeSet[Timer]()(new TimerOrder)
+    var timers = new TreeSet[MainLoop.Timer]()(new MainLoop.TimerOrder)
     // Use a sequence number to guarantee that timers are fired in the order that they're set.
     var seq = 0L
     val lock: AnyRef = new Object
@@ -53,12 +56,12 @@ class MainLoop {
     // from within the callbacks that are called from within run itself.  You
     // can use setTimer with a delay of 0 as a sort of mailbox abstraction to
     // communicate between threads.
-    def setTimer(delayMillis: Long, f: () => Unit): Timer = {
+    def setTimer(delayMillis: Long, f: () => Unit): MainLoop.Timer = {
         val now = java.lang.System.currentTimeMillis
         var soonest = false
-        var timer: Timer = null
+        var timer: MainLoop.Timer = null
         lock.synchronized {
-            timer = new Timer(now + delayMillis, seq, f)
+            timer = new MainLoop.Timer(now + delayMillis, seq, f)
             soonest = timers.isEmpty || timer.when < timers.head.when
             timers = timers + timer
             seq += 1
@@ -68,7 +71,7 @@ class MainLoop {
         timer
     }
 
-    def clrTimer(timer: Timer) {
+    def clrTimer(timer: MainLoop.Timer) {
         lock.synchronized {
             require(timers.contains(timer))
             timers = timers - timer
@@ -77,7 +80,7 @@ class MainLoop {
 
     private def runTimers(now: Long): Long = {
         while (true) {
-            var timer: Timer = null
+            var timer: MainLoop.Timer = null
             lock.synchronized {
                 if (timers.isEmpty)
                     return if (callbacks.isEmpty) -1 else 0
