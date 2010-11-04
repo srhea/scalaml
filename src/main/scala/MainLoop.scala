@@ -90,13 +90,16 @@ class MainLoop {
             lock.synchronized {
                 if (timers.isEmpty)
                     return if (callbacks.isEmpty) -1 else 0
-                else if (timers.head.when <= now) {
-                    timer = timers.head
-                    timers = timers - timer
-                }
                 else {
-                    assert(timers.head.when > now)
-                    return timers.head.when - now
+                    val head = timers.head
+                    if (head.when <= now) {
+                        timer = head
+                        timers = timers - timer
+                    }
+                    else {
+                        assert(head.when > now)
+                        return head.when - now
+                    }
                 }
             }
             if (timer != null)
