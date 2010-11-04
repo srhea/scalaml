@@ -1,15 +1,14 @@
 import java.nio.channels._
 import java.nio.channels.SelectionKey._
 import scala.collection.mutable._
-import scala.collection.immutable.TreeSet
 import scala.collection.JavaConversions._
 
 object MainLoop {
     class Timer(val when: Long, val seq: Long, val f: () => Unit)
-    class TimerOrder extends Ordering[Timer] {
-        def compare(x: Timer, y: Timer): Int = {
-            val c = x.when.compare(y.when)
-            if (c == 0) x.seq.compare(y.seq) else c
+    extends java.lang.Comparable[Timer] {
+        override def compareTo(that: Timer): Int = {
+            val c = this.when.compare(that.when)
+            if (c == 0) this.seq.compare(that.seq) else c
         }
     }
 }
@@ -24,7 +23,7 @@ class MainLoop {
     // then set time doesn't matter.  If they're canceled, then cancel time does matter.  So
     // I optimize for cancel time by using a sorted set.  (If I were optimizing for set time,
     // I'd use a priority queue.)
-    var timers = new TreeSet[MainLoop.Timer]()(new MainLoop.TimerOrder)
+    var timers = new java.util.TreeSet[MainLoop.Timer]
     // Use a sequence number to guarantee that timers are fired in the order that they're set.
     var seq = 0L
     val lock: AnyRef = new Object
@@ -69,7 +68,7 @@ class MainLoop {
         lock.synchronized {
             timer = new MainLoop.Timer(now + delayMillis, seq, f)
             soonest = timers.isEmpty || timer.when < timers.head.when
-            timers = timers + timer
+            timers.add(timer)
             seq += 1
         }
         if (soonest)
@@ -80,7 +79,7 @@ class MainLoop {
     def clrTimer(timer: MainLoop.Timer) {
         lock.synchronized {
             require(timers.contains(timer))
-            timers = timers - timer
+            timers.remove(timer)
         }
     }
 
@@ -91,10 +90,11 @@ class MainLoop {
                 if (timers.isEmpty)
                     return if (callbacks.isEmpty) -1 else 0
                 else {
-                    val head = timers.head
+                    val i = timers.iterator
+                    val head = i.next()
                     if (head.when <= now) {
                         timer = head
-                        timers = timers - timer
+                        i.remove()
                     }
                     else {
                         assert(head.when > now)
